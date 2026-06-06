@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import bcrypt from "bcryptjs";
 
 export const SESSION_COOKIE_NAME = "pm_session";
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 3;
@@ -72,12 +73,9 @@ export function verifySessionToken(token: string | undefined): string | null {
 }
 
 export async function hashPassword(password: string): Promise<string> {
-  return Bun.password.hash(password, {
-    algorithm: "bcrypt",
-    cost: 12,
-  });
+  return bcrypt.hash(password, 12);
 }
 
 export async function verifyPassword(password: string, hash: string): Promise<boolean> {
-  return Bun.password.verify(password, hash);
+  return bcrypt.compare(password, hash);
 }

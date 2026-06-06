@@ -1,3 +1,4 @@
+import { setTimeout } from "node:timers/promises";
 import type {
   RunHeartbeatLoopParams,
   SendHeartbeatParams,
@@ -40,6 +41,6 @@ export async function runHeartbeatLoop({
       return;
     }
 
-    await Bun.sleep(intervalMs);
+    await setTimeout(intervalMs);
   }
 }
