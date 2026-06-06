@@ -1,4 +1,4 @@
-import type { PrismaClient } from "../src/generated/prisma/client";
+import type { PrismaClient } from "@prisma/client";
 
 export type GlobalForPrisma = {
   prisma: PrismaClient;

@@ -20,7 +20,7 @@ export async function registerUser(input: { userId: string; password: string }) 
 
   const passwordHash = await hashPassword(password);
 
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx: any) => {
     const user = await tx.user.create({
       data: {
         userId,

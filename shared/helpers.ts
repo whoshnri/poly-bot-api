@@ -1,5 +1,5 @@
 import prisma from "../db/prisma";
-import type { Prisma } from "../src/generated/prisma/client";
+import type { Prisma } from "@prisma/client";
 
 type SessionMetadata = Record<string, unknown>;
 type StageLock = {

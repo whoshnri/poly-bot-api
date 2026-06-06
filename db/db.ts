@@ -1,6 +1,6 @@
 import prisma from "./prisma";
 import { callWakeApi } from "../shared/wakeCaller";
-import { SessionAction } from "../src/generated/prisma/client";
+import { SessionAction } from "@prisma/client";
 import type { CreateNewStageInput, CreateNewTaskInput } from "../types/db";
 import { getPendingFeedback } from "../session/feedback";
 import { buildSessionResumeState } from "../session/resumeLogic";

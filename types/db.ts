@@ -1,4 +1,4 @@
-import type { Prisma, SessionAction } from "../src/generated/prisma/client";
+import type { Prisma, SessionAction } from "@prisma/client";
 
 export type UserPreferences = {
   dryRun?: boolean;
