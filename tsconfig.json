@@ -5,20 +5,11 @@
     "moduleResolution": "bundler",
     "strict": true,
     "skipLibCheck": true,
-    "types": ["node"],
+    "types": ["node", "bun"],
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
     "noEmit": true
   },
-  "include": [
-    "src/**/*.ts",
-    "zeptomail.d.ts",
-    "actions/**/*.ts",
-    "lib/**/*.ts",
-    "routes/**/*.ts",
-    "types/**/*.ts",
-    "types/**/*.d.ts",
-    "prisma.config.ts"
-  ],
-  "exclude": ["node_modules"]
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "src/index.ts"]
 }

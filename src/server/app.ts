@@ -2,11 +2,11 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { HTTPException } from "hono/http-exception";
-import { jsonFail } from "../shared/apiResponse";
-import { debugError } from "../shared/log";
-import { type AuthVariables, requireAuth } from "./middleware/auth";
-import { login, logout, me, register } from "./routes/auth";
-import { readRunReadiness, readSettings, writeSettings } from "./routes/settings";
+import { jsonFail, jsonOk } from "../../shared/apiResponse";
+import { debugError } from "../../shared/log";
+import { type AuthVariables, requireAuth } from "../middleware/auth";
+import { login, logout, me, register } from "../routes/auth";
+import { readRunReadiness, readSettings, writeSettings } from "../routes/settings";
 import {
   getPendingFeedbackRoute,
   getSessionResumeStatus,
@@ -16,12 +16,11 @@ import {
   startSession,
   streamSessionEvents,
   submitFeedback,
-} from "./routes/sessions";
-import { getHealth } from "./routes/wake";
-import { getHealthDeps } from "./routes/health";
+} from "../routes/sessions";
+import { getHealth } from "../routes/wake";
+import { getHealthDeps } from "../routes/health";
 
 const app = new Hono();
-
 
 const ALLOWED_ORIGINS = (process.env.FRONTEND_ORIGIN ?? "http://localhost:5173")
   .split(",")
@@ -46,7 +45,17 @@ app.onError((err, c) => {
   return jsonFail(c, "Internal server error.", 500);
 });
 
-app.notFound((c) => jsonFail(c, "Not found.", 404));
+app.notFound((c) =>
+  jsonFail(c, `Not found: ${c.req.method} ${c.req.path}`, 404),
+);
+
+app.get("/", (c) =>
+  jsonOk(c, {
+    service: "polymarket-bot-api",
+    status: "ok",
+    health: "/health",
+  }),
+);
 
 app.get("/health", getHealth);
 app.post("/api/auth/register", register);

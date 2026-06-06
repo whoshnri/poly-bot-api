@@ -1,5 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "npm install",
-  "buildCommand": "npx prisma generate"
+  "buildCommand": "npm run vercel-build",
+  "build": {
+    "env": {
+      "VERCEL_EXPERIMENTAL_BACKENDS": "1",
+      "NODEJS_HELPERS": "0"
+    }
+  }
 }
