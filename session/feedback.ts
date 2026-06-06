@@ -65,7 +65,10 @@ function isValidFeedbackSelection(selected: string, options: string[]): boolean 
 }
 
 export function formatFeedbackAnswer(
-  pending: Pick<PendingFeedback, "type" | "question" | "options">,
+  pending: Pick<
+    PendingFeedback,
+    "type" | "question" | "options" | "minSelections" | "maxSelections"
+  >,
   answer: FeedbackAnswerInput,
 ): string {
   if (pending.type === "text") {

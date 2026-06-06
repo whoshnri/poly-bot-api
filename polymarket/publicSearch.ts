@@ -1,4 +1,4 @@
-import { toEssentialMarket } from "./getMarkets";
+import { DEFAULT_GAMMA_API_URL, toEssentialMarket } from "./getMarkets";
 import type {
   EssentialGammaMarket,
   GammaMarket,
@@ -6,8 +6,6 @@ import type {
   PublicSearchParams,
   PublicSearchResponse,
 } from "../types/polymarket";
-
-export const DEFAULT_GAMMA_API_URL = "https://gamma-api.polymarket.com";
 
 type GammaSearchEvent = {
   id: string;

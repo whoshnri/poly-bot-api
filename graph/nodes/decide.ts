@@ -205,7 +205,7 @@ async function persistSessionScoring(
         ...metadata,
         scoring,
         normalizedMarkets,
-      },
+      } as object,
     },
   });
 }

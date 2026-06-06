@@ -42,26 +42,8 @@ import { emitChatMessage, emitUiEvent, summarizeToolResultData } from "../emit";
 import { ensureSessionId } from "../persist";
 import { createServerMessage } from "../messages";
 
-function withSessionIdForTokenTools(
-  toolCall: ToolCall,
-  sessionId: string | null,
-): ToolExecutorConfig {
-  if (
-    toolCall.tool !== "save-target-token" &&
-    toolCall.tool !== "update-target-token"
-  ) {
-    return toolCall.metadata as ToolExecutorConfig;
-  }
-
-  const resolvedSessionId = toolCall.metadata.sessionId ?? sessionId;
-  if (!resolvedSessionId) {
-    throw new Error(`${toolCall.tool} requires a sessionId.`);
-  }
-
-  return {
-    ...toolCall.metadata,
-    sessionId: resolvedSessionId,
-  };
+function toolExecutorConfigForCall(toolCall: ToolCall): ToolExecutorConfig {
+  return toolCall.metadata as ToolExecutorConfig;
 }
 
 function phaseBlockedToolResult(
@@ -72,12 +54,10 @@ function phaseBlockedToolResult(
   return {
     status: "error",
     message: `Tool "${tool}" is not allowed in phase ${phase}.`,
+    data: null,
     error: {
-      code: "PHASE_TOOL_BLOCKED",
-      details: {
-        phase,
-        allowedTools: allowed,
-      },
+      name: "PHASE_TOOL_BLOCKED",
+      details: JSON.stringify({ phase, allowedTools: allowed }),
     },
   };
 }
@@ -220,7 +200,7 @@ export async function runToolCallsNode(state: TradingGraphNodeState) {
             ...(toolCall.metadata as Record<string, unknown>),
             depth: workflow.phase === "BACKGROUND" ? "deep" : "quick",
           } as ToolExecutorConfig)
-        : withSessionIdForTokenTools(toolCall, state.sessionId);
+        : toolExecutorConfigForCall(toolCall);
 
     const result = await executeTool(toolCall.tool, toolConfig);
 

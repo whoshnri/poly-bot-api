@@ -6,6 +6,16 @@ import type { OpenOrderRecord } from "../../types/tools";
 
 export type StageActionData = NonNullable<AiModelResponse["nextStage"]["stageActionData"]>;
 
+export type StartTradeOrder = {
+  tokenId: string;
+  side: "BUY" | "SELL";
+  price: number;
+  shareSize: number;
+  orderType: "GTC" | "GTD";
+  postOnly?: boolean;
+  expiration?: number;
+};
+
 export type StartTradeActionData = {
   reason: string;
   resumeAt: string;
@@ -16,7 +26,6 @@ export type EndTradeActionData = { reason: string };
 export type WaitActionData = { reason: string; resumeAt: string };
 export type SkipActionData = { reason: string };
 export type ClarifyActionData = { reason: string; userMessageHtml: string; resumeAt: string };
-export type StartTradeOrder = StartTradeActionData["order"];
 
 export function asStartTradeActionData(
   data: StageActionData | null,

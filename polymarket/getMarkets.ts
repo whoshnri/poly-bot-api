@@ -216,6 +216,6 @@ export async function getFilteredMarketById(
     );
   }
 
-  const raw: GammaMarket = await response.json();
+  const raw = (await response.json()) as GammaMarket;
   return toEssentialMarket(raw);
 }
