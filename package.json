@@ -8,7 +8,8 @@
     "start": "bun src/index.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "test": "bun test"
+    "test": "bun test",
+    "postinstall": "prisma generate"
   },
   "devDependencies": {
     "@types/bun": "^1.3.12",
