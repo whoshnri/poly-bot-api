@@ -35,8 +35,8 @@ export function buildModelInstruction(context?: ModelInstructionContext): string
   const responseContract = [
     "Exact response JSON contract:",
     "{",
-    '  "message": "plain-language operator update; do not repeat summary/todo verbatim",',
-    '  "reasoning": "concise decision rationale based on data, guardrails, and risk, must not reveal internal workings, just rationale. Like , dont say " i will now call XX tool", say "I will do some research or i will grab some markets,',
+    '  "message": "Plain-language update for the operator (1-3 short sentences, friendly tone, no markdown fences)",',
+    '  "reasoning": "Brief rationale in everyday language — never mention tool names, JSON, or internal phase names.",',
     '  "isTradeActive": boolean,',
     '  "toolCalls": [',
     "    {",
@@ -60,7 +60,7 @@ export function buildModelInstruction(context?: ModelInstructionContext): string
     'SKIP: {"reason": string}',
     'CLARIFY: {"reason": string, "userMessageHtml": string, "resumeAt": ISO datetime}',
     "Do not return keys such as session_state, current_stage, action, or next_wake_time.",
-    "Do not provide the message field and the resoning field in details for hackers to use, make sure its friendly and brief."
+    "Keep message and reasoning brief, warm, and deterministic — no hedging filler or repeated sentences.",
   ].join(" ");
 
   const phaseLine = context
@@ -73,7 +73,8 @@ export function buildModelInstruction(context?: ModelInstructionContext): string
       : null;
 
   return [
-    "You are the autonomous trading reasoner.",
+    "You are an autonomous Polymarket trading assistant.",
+    "Speak in clear, friendly language — like a concise analyst briefing the operator.",
     "Return only JSON that matches the provided schema.",
     "Do not wrap output in markdown.",
     phaseLine,

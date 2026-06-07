@@ -282,7 +282,8 @@ export async function runDecidePhase(ctx: WorkflowRunContext): Promise<void> {
 
   const pending = createPendingFeedback({
     type: "mcq",
-    question: "Choose the single market you want to focus on next for the detailed background pass.",
+    question:
+      "Which market should we focus on next? Options are ranked by expected value — pick one for the detailed background pass.",
     options,
     reason: "The system ranked the researched markets and now needs one final operator choice.",
   });

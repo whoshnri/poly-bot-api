@@ -208,6 +208,34 @@ describe("enrichFeedbackRequest", () => {
     expect(feedback.minSelections).toBe(1);
     expect(feedback.maxSelections).toBe(2);
   });
+
+  test("enriches DECIDE options with actionable copy", () => {
+    const shortlist = [{ marketId: "m1", question: "Will X win?" }];
+    const feedback = enrichFeedbackRequest(
+      "DECIDE",
+      { type: "mcq", question: "Pick one" },
+      { phase: "DECIDE", shortlist, rankedMarketIds: ["m1"] },
+    );
+
+    expect(feedback.options[0]).toContain("deep background research");
+    expect(feedback.options[0]).toContain("highest EV");
+  });
+
+  test("enriches APPROVE options with detailed trade copy", () => {
+    const feedback = enrichFeedbackRequest(
+      "APPROVE",
+      { type: "mcq", question: "Approve?" },
+      {
+        phase: "APPROVE",
+        shortlist: [{ marketId: "m1", question: "Will X win?" }],
+        chosen: { marketId: "m1", tokenId: "t1", side: "BUY", thesis: "yes" },
+      },
+    );
+
+    expect(feedback.question).toContain("m1");
+    expect(feedback.options[0]).toContain("place order");
+    expect(feedback.options[1]).toContain("cancel");
+  });
 });
 
 describe("matchShortlistSelection", () => {

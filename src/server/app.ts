@@ -7,6 +7,7 @@ import { debugError } from "../../shared/log";
 import { type AuthVariables, requireAuth } from "../middleware/auth";
 import { login, logout, me, register } from "../routes/auth";
 import { readRunReadiness, readSettings, writeSettings } from "../routes/settings";
+import { discoverChat, discoverRun } from "../../discover/routes";
 import {
   getPendingFeedbackRoute,
   getSessionResumeStatus,
@@ -70,6 +71,8 @@ authed.get("/settings/readiness", readRunReadiness);
 authed.get("/settings", readSettings);
 authed.put("/settings", writeSettings);
 authed.get("/sessions", getSessions);
+authed.post("/discover/chat", discoverChat);
+authed.post("/discover/run", discoverRun);
 authed.post("/sessions/start", startSession);
 authed.post("/sessions/:sessionId/feedback", submitFeedback);
 authed.get("/sessions/:sessionId/feedback/pending", getPendingFeedbackRoute);

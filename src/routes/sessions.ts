@@ -41,8 +41,31 @@ export async function getSessions(c: Context) {
 
 export async function startSession(c: Context) {
   const userId = c.get("userId");
-  const body = (await c.req.json()) as { instruction?: string };
-  const instruction = body.instruction?.trim() || "Start active market discovery.";
+  const body = (await c.req.json()) as {
+    instruction?: string;
+    preSession?: {
+      topic?: string;
+      summary?: string;
+      queries?: string[];
+      selectedMarketId?: string;
+      markets?: Array<{
+        marketId?: string;
+        question?: string;
+        eventTitle?: string;
+        tokenIds?: string[];
+      }>;
+    };
+  };
+  const preSessionRaw = body.preSession;
+  const hasPreSession = Boolean(
+    preSessionRaw?.selectedMarketId &&
+      preSessionRaw.topic?.trim() &&
+      preSessionRaw.markets?.length,
+  );
+
+  const instruction = hasPreSession
+    ? `Research and evaluate: ${preSessionRaw!.topic!.trim()} — starting from pre-selected market ${preSessionRaw!.selectedMarketId}.`
+    : body.instruction?.trim() || "Start active market discovery.";
 
   await applyRuntimeBotConfigForUser(userId);
 
@@ -59,11 +82,40 @@ export async function startSession(c: Context) {
   const createdAt = new Date();
   const session = await createNewTask({
     name: buildSessionName(createdAt),
-    metadata: { targetToken: null, instruction },
+    metadata: {
+      targetToken: null,
+      instruction,
+      ...(hasPreSession
+        ? {
+            preSession: {
+              topic: preSessionRaw!.topic!.trim(),
+              summary: preSessionRaw!.summary?.trim(),
+              queries: preSessionRaw!.queries ?? [],
+              selectedMarketId: preSessionRaw!.selectedMarketId!,
+              markets: preSessionRaw!.markets!,
+            },
+          }
+        : {}),
+    },
     userId,
   });
 
-  await initializeSessionWorkflow(session.id, instruction);
+  const preSession = hasPreSession
+    ? {
+        topic: preSessionRaw!.topic!.trim(),
+        summary: preSessionRaw!.summary?.trim(),
+        queries: preSessionRaw!.queries ?? [],
+        selectedMarketId: preSessionRaw!.selectedMarketId!,
+        markets: preSessionRaw!.markets!.map((market) => ({
+          marketId: market.marketId!.trim(),
+          question: market.question?.trim() || "Untitled market",
+          eventTitle: market.eventTitle?.trim(),
+          tokenIds: market.tokenIds,
+        })),
+      }
+    : undefined;
+
+  await initializeSessionWorkflow(session.id, instruction, preSession);
 
   publishSessionEvent({
     id: randomUUID(),

@@ -42,7 +42,9 @@ export async function listSessions(userId: string) {
         getSessionWorkflow(session.id),
         getPendingFeedback(session.id),
       ]);
-      const resume = buildSessionResumeState(workflow, pending);
+      const resume = buildSessionResumeState(workflow, pending, {
+        createdAt: session.createdAt,
+      });
 
       return {
         id: session.id,

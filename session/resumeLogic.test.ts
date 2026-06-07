@@ -42,4 +42,16 @@ describe("buildSessionResumeState", () => {
     expect(state.mode).toBe("sleeping");
     expect(state.canContinue).toBe(true);
   });
+
+  test("marks just-started DISCOVER sessions as idle with hint", () => {
+    const state = buildSessionResumeState(
+      { phase: "DISCOVER", userSpec: { topic: "sports", source: "prompt" } },
+      null,
+      { createdAt: new Date() },
+    );
+
+    expect(state.justStarted).toBe(true);
+    expect(state.canContinue).toBe(false);
+    expect(state.mode).toBe("idle");
+  });
 });

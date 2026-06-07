@@ -134,14 +134,39 @@ export function enrichFeedbackRequest(
   }
 
   if (phase === "APPROVE") {
+    const chosenLabel = workflow.chosen?.marketId
+      ? formatRankedOption(workflow.chosen.marketId, workflow.shortlist)
+      : "the chosen market";
     const options =
       metadata.options && metadata.options.length >= 2
         ? metadata.options
-        : [...APPROVE_FEEDBACK_OPTIONS];
+        : [
+            "Yes, place order — submit the trade at the calculated size and limit price.",
+            "No, cancel — pause the session without placing a trade.",
+          ];
 
     return {
       type: "mcq",
-      question: metadata.question,
+      question: `Ready to place the order on ${chosenLabel}? Review the breakdown above, then choose an option.`,
+      options,
+    };
+  }
+
+  if (phase === "DECIDE") {
+    const rankedIds = workflow.rankedMarketIds ?? [];
+    const options =
+      rankedIds.length > 0
+        ? rankedIds.map((marketId, index) => {
+            const label = formatRankedOption(marketId, workflow.shortlist);
+            const rankHint = index === 0 ? " (highest EV)" : "";
+            return `${label}${rankHint} — Run deep background research on this pick before approval.`;
+          })
+        : (metadata.options ?? []);
+
+    return {
+      type: "mcq",
+      question:
+        "Pick one market to focus on next. Options are ranked by expected value (best first).",
       options,
     };
   }
@@ -211,6 +236,51 @@ export function defaultWorkflowState(instruction?: string): SessionWorkflowState
       topic: trimmed,
       source: "prompt",
     },
+  };
+}
+
+export type PreSessionMarketInput = {
+  marketId: string;
+  question: string;
+  eventTitle?: string;
+  tokenIds?: string[];
+};
+
+export type PreSessionInput = {
+  topic: string;
+  summary?: string;
+  queries?: string[];
+  selectedMarketId: string;
+  markets: PreSessionMarketInput[];
+};
+
+export function workflowFromPreSession(preSession: PreSessionInput): SessionWorkflowState {
+  const shortlist = trimShortlist(
+    preSession.markets.map((market) => ({
+      marketId: market.marketId,
+      question: market.question,
+      eventTitle: market.eventTitle,
+      tokenIds: market.tokenIds,
+    })),
+  );
+
+  const selected =
+    shortlist.find((candidate) => candidate.marketId === preSession.selectedMarketId) ??
+    shortlist[0];
+
+  if (!selected) {
+    throw new Error("Pre-session payload must include at least one market.");
+  }
+
+  return {
+    phase: "RESEARCH",
+    userSpec: {
+      topic: preSession.topic,
+      source: "prompt",
+      targetMarketId: selected.marketId,
+    },
+    shortlist,
+    selectedMarketIds: [selected.marketId],
   };
 }
 

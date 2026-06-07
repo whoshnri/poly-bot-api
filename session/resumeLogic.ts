@@ -8,11 +8,19 @@ export type SessionResumeMode =
   | "complete"
   | "idle";
 
+const JUST_STARTED_MS = 30_000;
+const EARLY_PHASES: SessionPhase[] = ["SPEC", "DISCOVER"];
+
 export type SessionResumeState = {
   canContinue: boolean;
   mode: SessionResumeMode;
   phase: SessionPhase;
   message: string;
+  justStarted?: boolean;
+};
+
+export type SessionResumeOptions = {
+  createdAt?: Date;
 };
 
 function phaseResumeMessage(phase: SessionPhase, workflow: SessionWorkflowState): string {
@@ -55,10 +63,22 @@ export async function getSessionResumeState(sessionId: string): Promise<SessionR
   return buildSessionResumeState(workflow, pending);
 }
 
+function isJustStarted(workflow: SessionWorkflowState, options?: SessionResumeOptions): boolean {
+  if (!options?.createdAt) {
+    return false;
+  }
+
+  const ageMs = Date.now() - options.createdAt.getTime();
+  return ageMs >= 0 && ageMs < JUST_STARTED_MS && EARLY_PHASES.includes(workflow.phase);
+}
+
 export function buildSessionResumeState(
   workflow: SessionWorkflowState,
   pending: PendingFeedback | null,
+  options?: SessionResumeOptions,
 ): SessionResumeState {
+  const justStarted = isJustStarted(workflow, options);
+
   if (pending) {
     return {
       canContinue: true,
@@ -101,6 +121,16 @@ export function buildSessionResumeState(
   ];
 
   if (continuablePhases.includes(workflow.phase)) {
+    if (justStarted) {
+      return {
+        canContinue: false,
+        mode: "idle",
+        phase: workflow.phase,
+        message: "Session is starting — the bot will pick up automatically.",
+        justStarted: true,
+      };
+    }
+
     return {
       canContinue: true,
       mode: "continue",

@@ -140,8 +140,9 @@ export async function buildPhaseAwareInitializationPrompt(
   ]);
 
   return [
-    "You are an autonomous Polymarket trading bot.",
+    "You are an autonomous Polymarket trading assistant.",
     "Follow the phased workflow below. Only use tools allowed in the current phase.",
+    "Use a friendly, deterministic tone — short sentences, no jargon about tools or APIs.",
     "",
     "Operator instruction:",
     userInstruction.trim(),
@@ -173,7 +174,8 @@ export async function buildPhaseAwareWakePrompt(sessionId: string): Promise<stri
   ]);
 
   return [
-    "You are an autonomous Polymarket trading bot resuming an active session.",
+    "You are an autonomous Polymarket trading assistant resuming an active session.",
+    "Use a friendly, deterministic tone — short sentences, no jargon about tools or APIs.",
     "",
     "Stage history:",
     stageHistory,

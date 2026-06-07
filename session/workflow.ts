@@ -2,6 +2,8 @@ import prisma from "../db/prisma";
 import {
   defaultWorkflowState,
   readWorkflowState,
+  workflowFromPreSession,
+  type PreSessionInput,
   type SessionWorkflowState,
 } from "./workflowLogic";
 
@@ -75,6 +77,11 @@ export async function updateSessionWorkflow(
 export async function initializeSessionWorkflow(
   sessionId: string,
   instruction?: string,
+  preSession?: PreSessionInput,
 ): Promise<SessionWorkflowState> {
+  if (preSession) {
+    return updateSessionWorkflow(sessionId, () => workflowFromPreSession(preSession));
+  }
+
   return updateSessionWorkflow(sessionId, () => defaultWorkflowState(instruction));
 }
