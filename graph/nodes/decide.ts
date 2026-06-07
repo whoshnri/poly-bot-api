@@ -11,8 +11,13 @@ import {
   type ScoredMarket,
   type SessionScoringState,
 } from "../../lib/scoring";
-import { getMarketById } from "../../polymarket";
 import { getResearchCookie } from "../../session/researchCookie";
+import {
+  fetchGammaMarketsById,
+  mergeTokenIdsIntoShortlist,
+  primaryTokenIdFromCandidate,
+  tokenIdsByMarketIdFromGamma,
+} from "../../session/marketTokens";
 import {
   AwaitingFeedbackError,
   createPendingFeedback,
@@ -85,30 +90,35 @@ function modelContentToText(content: unknown): string {
   return String(content ?? "");
 }
 
-async function fetchNormalizedMarkets(
+async function loadMarketsForScoring(
   marketIds: string[],
   existing: NormalizedMarket[] = [],
-): Promise<NormalizedMarket[]> {
+): Promise<{
+  normalizedMarkets: NormalizedMarket[];
+  tokenIdsByMarketId: Map<string, string[]>;
+}> {
   const existingById = new Map(existing.map((market) => [market.id, market]));
+  const gammaMarkets = await fetchGammaMarketsById(marketIds);
+  const tokenIdsByMarketId = tokenIdsByMarketIdFromGamma(gammaMarkets);
 
-  const fetched = await Promise.all(
-    marketIds.map(async (marketId) => {
-      const cached = existingById.get(marketId);
-      if (cached) {
-        return cached;
-      }
+  const normalizedMarkets: NormalizedMarket[] = [];
+  for (const marketId of marketIds) {
+    const cached = existingById.get(marketId);
+    if (cached) {
+      normalizedMarkets.push(cached);
+      continue;
+    }
 
-      try {
-        const market = await getMarketById({ marketId });
-        return normalizeMarketFromGamma(market);
-      } catch (error) {
-        debugError("graph.decide", "Failed to fetch market for scoring", { marketId }, error);
-        return null;
-      }
-    }),
-  );
+    const gammaMarket = gammaMarkets.get(marketId);
+    if (!gammaMarket) {
+      debugError("graph.decide", "Failed to fetch market for scoring", { marketId });
+      continue;
+    }
 
-  return fetched.filter((market): market is NormalizedMarket => market !== null);
+    normalizedMarkets.push(normalizeMarketFromGamma(gammaMarket));
+  }
+
+  return { normalizedMarkets, tokenIdsByMarketId };
 }
 
 async function estimateMarketProbability(
@@ -238,7 +248,15 @@ export async function runDecidePhase(ctx: WorkflowRunContext): Promise<void> {
     workflow.chosen?.marketId ?? workflow.userSpec?.targetMarketId,
   );
 
-  const normalizedMarkets = await fetchNormalizedMarkets(marketIds);
+  const { normalizedMarkets, tokenIdsByMarketId } = await loadMarketsForScoring(marketIds);
+
+  await updateSessionWorkflow(sessionId, (current) => ({
+    ...current,
+    shortlist: mergeTokenIdsIntoShortlist(current.shortlist, tokenIdsByMarketId),
+  }));
+
+  const enrichedShortlist =
+    (await getSessionWorkflow(sessionId)).shortlist ?? shortlist;
 
   const estimatesEntries = await Promise.all(
     normalizedMarkets.map(async (market) => {
@@ -285,12 +303,13 @@ export async function runDecidePhase(ctx: WorkflowRunContext): Promise<void> {
   if (uniqueMarketIds.length === 1) {
     const onlyMarketId = uniqueMarketIds[0]!;
     const candidate =
-      shortlist.find((entry) => entry.marketId === onlyMarketId) ??
+      enrichedShortlist.find((entry) => entry.marketId === onlyMarketId) ??
       ({
         marketId: onlyMarketId,
         question:
           normalizedMarkets.find((market) => market.id === onlyMarketId)?.question ??
           "Selected market",
+        tokenIds: tokenIdsByMarketId.get(onlyMarketId),
       } satisfies MarketCandidate);
 
     await updateSessionWorkflow(sessionId, (current) => ({
@@ -304,7 +323,8 @@ export async function runDecidePhase(ctx: WorkflowRunContext): Promise<void> {
       },
       chosen: {
         marketId: candidate.marketId,
-        tokenId: candidate.tokenIds?.[0] ?? current.chosen?.tokenId ?? "",
+        tokenId:
+          primaryTokenIdFromCandidate(candidate) ?? current.chosen?.tokenId ?? "",
         side: current.chosen?.side ?? "BUY",
         thesis: current.chosen?.thesis ?? "",
       },
@@ -336,7 +356,9 @@ export async function runDecidePhase(ctx: WorkflowRunContext): Promise<void> {
     return;
   }
 
-  const options = rankedMarketIds.map((marketId) => formatRankedOption(marketId, shortlist));
+  const options = rankedMarketIds.map((marketId) =>
+    formatRankedOption(marketId, enrichedShortlist),
+  );
 
   const rankedMarkets = buildRankedMarketPresentations(scoredMarkets);
 

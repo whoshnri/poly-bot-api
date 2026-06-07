@@ -198,7 +198,7 @@ export async function executeWorkflowToolCall(
         published: false,
       },
     );
-    return;
+    throw new Error(blocked.message);
   }
 
   if (toolCall.tool === "request_feedback") {

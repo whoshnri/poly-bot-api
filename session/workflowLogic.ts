@@ -216,9 +216,10 @@ function buildChosenFromCandidate(
   candidate: MarketCandidate,
   existing?: ChosenMarket,
 ): ChosenMarket {
+  const fromCandidate = candidate.tokenIds?.find((tokenId) => tokenId.trim().length > 0);
   return {
     marketId: candidate.marketId,
-    tokenId: candidate.tokenIds?.[0] ?? existing?.tokenId ?? "",
+    tokenId: fromCandidate ?? existing?.tokenId ?? "",
     side: existing?.side ?? "BUY",
     thesis: existing?.thesis ?? "",
   };

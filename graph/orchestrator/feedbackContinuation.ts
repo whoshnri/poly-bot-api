@@ -1,4 +1,5 @@
 import { debugLog } from "../../shared/log";
+import { ensureChosenTokenId } from "../../session/marketTokens";
 import {
   applyFeedbackToWorkflow,
   getSessionWorkflow,
@@ -41,7 +42,10 @@ export async function applyFeedbackContinuation(
     currentWorkflow,
     continuation.answer,
   );
-  const nextWorkflow = feedbackResolution.workflow;
+  let nextWorkflow = feedbackResolution.workflow;
+  if (nextWorkflow.phase === "BACKGROUND" || nextWorkflow.phase === "PRICE") {
+    nextWorkflow = await ensureChosenTokenId(nextWorkflow);
+  }
   await updateSessionWorkflow(sessionId, () => nextWorkflow);
 
   if (

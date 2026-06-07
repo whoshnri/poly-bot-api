@@ -4,7 +4,9 @@ export type RecoveryContext = {
   searchQuery?: string;
   phase?: SessionPhase;
   shortlistMarketId?: string;
+  /** CLOB outcome token — required for PRICE. Resolve via requireTradeTokenId(marketId). */
   tokenId?: string;
+  marketId?: string;
 };
 
 export function buildPhaseFallbackTool(context?: RecoveryContext): {
@@ -49,7 +51,15 @@ export function buildPhaseFallbackTool(context?: RecoveryContext): {
     };
   }
 
-  if (phase === "PRICE" && context?.tokenId) {
+  if (phase === "PRICE") {
+    if (!context?.tokenId?.trim()) {
+      throw new Error(
+        `PRICE phase requires a resolved CLOB tokenId` +
+          (context?.marketId ? ` for market ${context.marketId}` : "") +
+          ". Call requireTradeTokenId before building the price tool.",
+      );
+    }
+
     return {
       tool: "get-market-price",
       reason: "Recovering by fetching the executable price for the chosen token.",

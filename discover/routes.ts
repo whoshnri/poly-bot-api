@@ -6,6 +6,10 @@ import { publicSearch } from "../polymarket/publicSearch";
 import { jsonFail, jsonOk } from "../shared/apiResponse";
 import { assertUserCanRunBot } from "../db/users";
 import { OPERATOR_VOICE_GUIDELINES } from "../shared/operatorVoice";
+import {
+  enrichDiscoverMarketsWithTokenIds,
+  extractTokenIdsFromGammaMarket,
+} from "../session/marketTokens";
 import { scoreDiscoverMarkets, type DiscoverMarketHit } from "./scoring";
 
 export type DiscoverChatMessage = {
@@ -172,10 +176,12 @@ export async function discoverRun(c: Context) {
         if (market.closed || market.active === false) {
           continue;
         }
+        const tokenIds = extractTokenIdsFromGammaMarket(market);
         hits.push({
           marketId: market.id,
           question: market.question ?? "Untitled market",
           eventTitle: event.title,
+          tokenIds: tokenIds.length > 0 ? tokenIds : undefined,
           volume: market.volume ?? market.volume24hr ?? event.volume,
           liquidity: market.liquidity ?? market.liquidityClob ?? event.liquidity,
           query,
@@ -185,7 +191,8 @@ export async function discoverRun(c: Context) {
     }
   }
 
-  const markets = scoreDiscoverMarkets(hits, topic, limit);
+  const scored = scoreDiscoverMarkets(hits, topic, limit);
+  const markets = await enrichDiscoverMarketsWithTokenIds(scored);
 
   return jsonOk(c, {
     topic,

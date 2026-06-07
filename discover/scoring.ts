@@ -2,6 +2,7 @@ export type DiscoverMarketHit = {
   marketId: string;
   question: string;
   eventTitle?: string;
+  tokenIds?: string[];
   volume?: number;
   liquidity?: number;
   query: string;
@@ -12,6 +13,7 @@ export type ScoredDiscoverMarket = {
   marketId: string;
   question: string;
   eventTitle?: string;
+  tokenIds?: string[];
   score: number;
   volume?: number;
   liquidity?: number;
@@ -71,6 +73,10 @@ export function scoreDiscoverMarkets(
     existing.queries.add(hit.query);
     existing.volume = Math.max(existing.volume ?? 0, hit.volume ?? 0);
     existing.liquidity = Math.max(existing.liquidity ?? 0, hit.liquidity ?? 0);
+    if (hit.tokenIds && hit.tokenIds.length > 0) {
+      const merged = new Set([...(existing.tokenIds ?? []), ...hit.tokenIds]);
+      existing.tokenIds = [...merged];
+    }
   }
 
   const scored = [...byId.values()].map((hit) => {
@@ -87,6 +93,7 @@ export function scoreDiscoverMarkets(
       marketId: hit.marketId,
       question: hit.question,
       eventTitle: hit.eventTitle,
+      tokenIds: hit.tokenIds,
       volume: hit.volume,
       liquidity: hit.liquidity,
       score: Number(score.toFixed(4)),

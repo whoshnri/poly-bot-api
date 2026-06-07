@@ -1,7 +1,12 @@
 import { logInfo } from "../../shared/log";
 import { getResearchCookie } from "../../session/researchCookie";
 import { listResearchedMarketIds } from "../../session/researchCookieLogic";
-import { getSessionWorkflow } from "../../session/workflow";
+import {
+  ensureChosenTokenId,
+  MissingTradeTokenIdError,
+  requireTradeTokenId,
+} from "../../session/marketTokens";
+import { getSessionWorkflow, updateSessionWorkflow } from "../../session/workflow";
 import { resolveResearchMarketId } from "../../session/workflowTransitions";
 import type { ToolCall } from "../../types/schemas";
 import { emitChatMessage } from "../emit";
@@ -134,10 +139,61 @@ export async function runBackgroundPhase(ctx: WorkflowRunContext): Promise<void>
 }
 
 export async function runPricePhase(ctx: WorkflowRunContext): Promise<void> {
-  const workflow = await getSessionWorkflow(ctx.sessionId);
+  let workflow = await getSessionWorkflow(ctx.sessionId);
   if (workflow.phase !== "PRICE") {
     return;
   }
+
+  const enriched = await ensureChosenTokenId(workflow);
+  if (enriched !== workflow) {
+    workflow = await updateSessionWorkflow(ctx.sessionId, () => enriched);
+  }
+
+  const chosen = workflow.chosen;
+  if (!chosen?.marketId) {
+    throw new Error("Cannot fetch price: no chosen market is recorded for this session.");
+  }
+
+  const shortlistMatch = workflow.shortlist?.find(
+    (candidate) => candidate.marketId === chosen.marketId,
+  );
+
+  let tokenId: string;
+  try {
+    tokenId = await requireTradeTokenId({
+      marketId: chosen.marketId,
+      knownTokenIds: shortlistMatch?.tokenIds,
+      preferredTokenId: chosen.tokenId,
+    });
+  } catch (error) {
+    if (error instanceof MissingTradeTokenIdError) {
+      throw error;
+    }
+    throw new Error(
+      `Cannot fetch price: no CLOB token ID for market ${chosen.marketId}.`,
+      { cause: error },
+    );
+  }
+
+  if (tokenId !== chosen.tokenId) {
+    workflow = await updateSessionWorkflow(ctx.sessionId, (current) => ({
+      ...current,
+      chosen: current.chosen ? { ...current.chosen, tokenId } : current.chosen,
+    }));
+  }
+
+  emitChatMessage(
+    {
+      onEvent: ctx.onEvent ?? null,
+      sessionId: ctx.sessionId,
+      wakeTraceId: ctx.wakeTraceId,
+      userId: ctx.userId,
+    },
+    "bot",
+    "Fetching the latest executable price for the chosen market.",
+    "get-market-price · in progress",
+    ctx.sessionId,
+  );
 
   await runPhaseTool(ctx);
 }

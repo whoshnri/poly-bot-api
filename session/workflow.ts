@@ -1,4 +1,5 @@
 import prisma from "../db/prisma";
+import { enrichWorkflowTradeTokens } from "./marketTokens";
 import {
   defaultWorkflowState,
   readWorkflowState,
@@ -6,6 +7,15 @@ import {
   type PreSessionInput,
   type SessionWorkflowState,
 } from "./workflowLogic";
+
+export {
+  ensureChosenTokenId,
+  enrichWorkflowTradeTokens,
+  MissingTradeTokenIdError,
+  primaryTokenIdFromCandidate,
+  requireTradeTokenId,
+  resolveTokenIdForMarket,
+} from "./marketTokens";
 
 export {
   allowedToolsForPhase,
@@ -80,7 +90,9 @@ export async function initializeSessionWorkflow(
   preSession?: PreSessionInput,
 ): Promise<SessionWorkflowState> {
   if (preSession) {
-    return updateSessionWorkflow(sessionId, () => workflowFromPreSession(preSession));
+    const initial = workflowFromPreSession(preSession);
+    const enriched = await enrichWorkflowTradeTokens(initial);
+    return updateSessionWorkflow(sessionId, () => enriched);
   }
 
   return updateSessionWorkflow(sessionId, () => defaultWorkflowState(instruction));

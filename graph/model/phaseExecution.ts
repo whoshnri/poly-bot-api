@@ -34,14 +34,17 @@ export function buildModelRecoveryContext(
     workflow.userSpec?.topic ??
     state.userInstruction;
 
+  const chosenMarketId = workflow.chosen?.marketId;
+
   return {
     searchQuery: activeResearchQuestion,
     phase: workflow.phase,
     shortlistMarketId:
-      workflow.chosen?.marketId ??
+      chosenMarketId ??
       workflow.selectedMarketIds?.[0] ??
       workflow.shortlist?.[0]?.marketId,
-    tokenId: workflow.chosen?.tokenId,
+    marketId: chosenMarketId,
+    tokenId: workflow.chosen?.tokenId?.trim() || undefined,
   };
 }
 
