@@ -16,7 +16,7 @@ import {
   serializeOpportunitiesForEvent,
 } from "../../lib/scoring";
 import { getSessionWorkflow } from "../../session/workflow";
-import { allowedToolsForPhase } from "../../session/workflowLogic";
+import { allowedToolsForPhase, readPreSessionFromMetadata } from "../../session/workflowLogic";
 
 export async function runModelNode(state: TradingGraphNodeState) {
   if (shouldTripCircuitBreaker(state.failureCount)) {
@@ -40,12 +40,18 @@ export async function runModelNode(state: TradingGraphNodeState) {
   }
 
   const recoveryContext = buildModelRecoveryContext(workflow, state);
+  const session = await prisma.session.findUnique({
+    where: { id: sessionId },
+    select: { metadata: true },
+  });
+  const hasPreSession = Boolean(readPreSessionFromMetadata(session?.metadata));
 
   let aiResponse = await invokeUniversalModel(
     state.messages,
     {
       allowedTools: allowedToolsForPhase(workflow.phase),
       phase: workflow.phase,
+      hasPreSession,
     },
     recoveryContext,
     state.userId ?? "",
@@ -61,10 +67,6 @@ export async function runModelNode(state: TradingGraphNodeState) {
     if (state.opportunities.length > 0) {
       opportunities = serializeOpportunitiesForEvent(state.opportunities);
     } else {
-      const session = await prisma.session.findUnique({
-        where: { id: sessionId },
-        select: { metadata: true },
-      });
       const scoring = readSessionScoring(session?.metadata ?? null);
       opportunities = scoring
         ? serializeOpportunitiesForEvent(scoring.opportunities)

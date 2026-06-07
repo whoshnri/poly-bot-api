@@ -1,9 +1,12 @@
 import { getBotGaurdrails } from "../../config/bot";
 import type { WorkflowToolSlug } from "../../session/workflowLogic";
 
+import { OPERATOR_VOICE_GUIDELINES } from "../../shared/operatorVoice";
+
 export type ModelInstructionContext = {
   allowedTools: WorkflowToolSlug[];
   phase: string;
+  hasPreSession?: boolean;
 };
 
 const ALL_TOOLS: WorkflowToolSlug[] = [
@@ -72,23 +75,37 @@ export function buildModelInstruction(context?: ModelInstructionContext): string
       ? "In APPROVE, use only the final chosen market, deterministic scoring summary, price data, and detailed Tavily background provided in the session prompt. Ask for approval with request_feedback."
       : null;
 
+  const pipelineLines = context?.hasPreSession
+    ? [
+        "Phased pipeline (market already chosen via explore — skip DISCOVER and SHORTLIST):",
+        "- RESEARCH: web_research on every operator-selected market",
+        "- DECIDE: handled by deterministic scoring and operator final selection",
+        "- BACKGROUND: detailed web_research + get-market-by-id for the final pick",
+        "- PRICE: get-market-price",
+        "- APPROVE: present the final breakdown and call request_feedback",
+        "- EXECUTE: START_TRADE only after operator approval",
+      ]
+    : [
+        "Phased pipeline:",
+        "- DISCOVER: get-markets for active markets only",
+        "- SHORTLIST: request_feedback multi_select with 10 options",
+        "- RESEARCH: web_research on every operator-selected market",
+        "- DECIDE: handled by deterministic scoring and operator final selection",
+        "- BACKGROUND: detailed web_research + get-market-by-id for the final pick",
+        "- PRICE: get-market-price",
+        "- APPROVE: present the final breakdown and call request_feedback",
+        "- EXECUTE: START_TRADE only after operator approval",
+      ];
+
   return [
     "You are an autonomous Polymarket trading assistant.",
-    "Speak in clear, friendly language — like a concise analyst briefing the operator.",
+    OPERATOR_VOICE_GUIDELINES,
     "Return only JSON that matches the provided schema.",
     "Do not wrap output in markdown.",
     phaseLine,
     approveLine,
     "Use toolCalls only for decision-support data gathering allowed in the current phase.",
-    "Phased pipeline:",
-    "- DISCOVER: get-markets for active markets only",
-    "- SHORTLIST: request_feedback multi_select with 10 options",
-    "- RESEARCH: web_research on every operator-selected market",
-    "- DECIDE: handled by deterministic scoring and operator final selection",
-    "- BACKGROUND: detailed web_research + get-market-by-id for the final pick",
-    "- PRICE: get-market-price",
-    "- APPROVE: present the final breakdown and call request_feedback",
-    "- EXECUTE: START_TRADE only after operator approval",
+    ...pipelineLines,
     "Never START_TRADE before phase EXECUTE.",
     "If more information is needed, keep nextStage.stageAction null and use toolCalls.",
     "For START_TRADE, shareSize is outcome shares/contracts, not USDC. Estimated BUY spend is price * shareSize and must fit guardrails.",

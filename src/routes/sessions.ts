@@ -18,9 +18,10 @@ import {
 } from "../../session/feedback";
 import { getSessionResumeState } from "../../session/resumeLogic";
 import { isChatVisibleEvent, publishRunError, publishSessionEvent, subscribeSessionEvents, getSessionEventsHistory } from "../../session/events";
+import { publishPreSessionHandoff } from "../../session/preSessionHandoff";
 import { initializeSessionWorkflow } from "../../session/workflow";
 import { jsonFail, jsonOk } from "../../shared/apiResponse";
-import { buildSessionName } from "../../shared/sessionLabel";
+import { buildSessionName, buildSessionNameFromPreSession } from "../../shared/sessionLabel";
 import { debugError, logInfo } from "../../shared/log";
 import { assertOwned } from "./settings";
 
@@ -48,6 +49,7 @@ export async function startSession(c: Context) {
       summary?: string;
       queries?: string[];
       selectedMarketId?: string;
+      exploreMessages?: Array<{ role?: "user" | "bot"; content?: string }>;
       markets?: Array<{
         marketId?: string;
         question?: string;
@@ -62,6 +64,14 @@ export async function startSession(c: Context) {
       preSessionRaw.topic?.trim() &&
       preSessionRaw.markets?.length,
   );
+
+  if (!hasPreSession) {
+    return jsonFail(
+      c,
+      "A market must be selected in explore chat before starting a session. Pick a market and try again.",
+      400,
+    );
+  }
 
   const instruction = hasPreSession
     ? `Research and evaluate: ${preSessionRaw!.topic!.trim()} — starting from pre-selected market ${preSessionRaw!.selectedMarketId}.`
@@ -80,8 +90,18 @@ export async function startSession(c: Context) {
   }
 
   const createdAt = new Date();
+  const selectedMarketQuestion = hasPreSession
+    ? preSessionRaw!.markets!.find(
+        (market) => market.marketId === preSessionRaw!.selectedMarketId,
+      )?.question
+    : undefined;
   const session = await createNewTask({
-    name: buildSessionName(createdAt),
+    name: hasPreSession
+      ? buildSessionNameFromPreSession(
+          preSessionRaw!.topic!.trim(),
+          selectedMarketQuestion,
+        )
+      : buildSessionName(createdAt),
     metadata: {
       targetToken: null,
       instruction,
@@ -93,6 +113,17 @@ export async function startSession(c: Context) {
               queries: preSessionRaw!.queries ?? [],
               selectedMarketId: preSessionRaw!.selectedMarketId!,
               markets: preSessionRaw!.markets!,
+              exploreMessages: (preSessionRaw!.exploreMessages ?? [])
+                .filter(
+                  (entry): entry is { role: "user" | "bot"; content: string } =>
+                    (entry.role === "user" || entry.role === "bot") &&
+                    typeof entry.content === "string" &&
+                    entry.content.trim().length > 0,
+                )
+                .map((entry) => ({
+                  role: entry.role,
+                  content: entry.content.trim(),
+                })),
             },
           }
         : {}),
@@ -100,12 +131,25 @@ export async function startSession(c: Context) {
     userId,
   });
 
+  const exploreMessages = (preSessionRaw?.exploreMessages ?? [])
+    .filter(
+      (entry): entry is { role: "user" | "bot"; content: string } =>
+        (entry.role === "user" || entry.role === "bot") &&
+        typeof entry.content === "string" &&
+        entry.content.trim().length > 0,
+    )
+    .map((entry) => ({
+      role: entry.role,
+      content: entry.content.trim(),
+    }));
+
   const preSession = hasPreSession
     ? {
         topic: preSessionRaw!.topic!.trim(),
         summary: preSessionRaw!.summary?.trim(),
         queries: preSessionRaw!.queries ?? [],
         selectedMarketId: preSessionRaw!.selectedMarketId!,
+        exploreMessages,
         markets: preSessionRaw!.markets!.map((market) => ({
           marketId: market.marketId!.trim(),
           question: market.question?.trim() || "Untitled market",
@@ -117,13 +161,17 @@ export async function startSession(c: Context) {
 
   await initializeSessionWorkflow(session.id, instruction, preSession);
 
-  publishSessionEvent({
-    id: randomUUID(),
-    sessionId: session.id,
-    timestamp: new Date().toISOString(),
-    kind: "chat-message",
-    payload: { role: "user", content: instruction },
-  });
+  if (preSession) {
+    publishPreSessionHandoff(session.id, preSession, exploreMessages);
+  } else {
+    publishSessionEvent({
+      id: randomUUID(),
+      sessionId: session.id,
+      timestamp: new Date().toISOString(),
+      kind: "chat-message",
+      payload: { role: "user", content: instruction },
+    });
+  }
 
   logInfo("session-start", "Starting session from instruction", {
     sessionId: session.id,

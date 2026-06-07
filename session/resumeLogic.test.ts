@@ -54,4 +54,20 @@ describe("buildSessionResumeState", () => {
     expect(state.canContinue).toBe(false);
     expect(state.mode).toBe("idle");
   });
+
+  test("marks just-started pre-session RESEARCH sessions as idle with hint", () => {
+    const state = buildSessionResumeState(
+      {
+        phase: "RESEARCH",
+        selectedMarketIds: ["m1"],
+        userSpec: { topic: "election odds", source: "prompt" },
+      },
+      null,
+      { createdAt: new Date(), hasPreSession: true },
+    );
+
+    expect(state.justStarted).toBe(true);
+    expect(state.canContinue).toBe(false);
+    expect(state.mode).toBe("idle");
+  });
 });

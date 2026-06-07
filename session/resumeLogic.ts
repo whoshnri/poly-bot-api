@@ -1,3 +1,4 @@
+import prisma from "../db/prisma";
 import { getPendingFeedback, type PendingFeedback } from "./feedback";
 import { getSessionWorkflow, type SessionPhase, type SessionWorkflowState } from "./workflow";
 
@@ -21,7 +22,15 @@ export type SessionResumeState = {
 
 export type SessionResumeOptions = {
   createdAt?: Date;
+  hasPreSession?: boolean;
 };
+
+function readHasPreSession(metadata: unknown): boolean {
+  if (!metadata || typeof metadata !== "object") {
+    return false;
+  }
+  return Boolean((metadata as Record<string, unknown>).preSession);
+}
 
 function phaseResumeMessage(phase: SessionPhase, workflow: SessionWorkflowState): string {
   switch (phase) {
@@ -55,12 +64,19 @@ function phaseResumeMessage(phase: SessionPhase, workflow: SessionWorkflowState)
 }
 
 export async function getSessionResumeState(sessionId: string): Promise<SessionResumeState> {
-  const [workflow, pending] = await Promise.all([
+  const [workflow, pending, session] = await Promise.all([
     getSessionWorkflow(sessionId),
     getPendingFeedback(sessionId),
+    prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { createdAt: true, metadata: true },
+    }),
   ]);
 
-  return buildSessionResumeState(workflow, pending);
+  return buildSessionResumeState(workflow, pending, {
+    createdAt: session?.createdAt,
+    hasPreSession: readHasPreSession(session?.metadata),
+  });
 }
 
 function isJustStarted(workflow: SessionWorkflowState, options?: SessionResumeOptions): boolean {
@@ -69,7 +85,15 @@ function isJustStarted(workflow: SessionWorkflowState, options?: SessionResumeOp
   }
 
   const ageMs = Date.now() - options.createdAt.getTime();
-  return ageMs >= 0 && ageMs < JUST_STARTED_MS && EARLY_PHASES.includes(workflow.phase);
+  if (ageMs < 0 || ageMs >= JUST_STARTED_MS) {
+    return false;
+  }
+
+  if (EARLY_PHASES.includes(workflow.phase)) {
+    return true;
+  }
+
+  return options.hasPreSession === true && workflow.phase === "RESEARCH";
 }
 
 export function buildSessionResumeState(

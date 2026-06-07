@@ -246,13 +246,76 @@ export type PreSessionMarketInput = {
   tokenIds?: string[];
 };
 
+export type PreSessionExploreMessage = {
+  role: "user" | "bot";
+  content: string;
+};
+
 export type PreSessionInput = {
   topic: string;
   summary?: string;
   queries?: string[];
   selectedMarketId: string;
   markets: PreSessionMarketInput[];
+  exploreMessages?: PreSessionExploreMessage[];
 };
+
+export function readPreSessionFromMetadata(metadata: unknown): PreSessionInput | null {
+  if (!metadata || typeof metadata !== "object") {
+    return null;
+  }
+
+  const raw = (metadata as Record<string, unknown>).preSession;
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+
+  const value = raw as Record<string, unknown>;
+  const topic = typeof value.topic === "string" ? value.topic.trim() : "";
+  const selectedMarketId =
+    typeof value.selectedMarketId === "string" ? value.selectedMarketId.trim() : "";
+  const markets = Array.isArray(value.markets) ? value.markets : [];
+
+  if (!topic || !selectedMarketId || markets.length === 0) {
+    return null;
+  }
+
+  return {
+    topic,
+    summary: typeof value.summary === "string" ? value.summary.trim() : undefined,
+    queries: Array.isArray(value.queries)
+      ? value.queries.filter((entry): entry is string => typeof entry === "string")
+      : [],
+    selectedMarketId,
+    exploreMessages: Array.isArray(value.exploreMessages)
+      ? value.exploreMessages
+          .filter(
+            (entry): entry is PreSessionExploreMessage =>
+              Boolean(entry) &&
+              typeof entry === "object" &&
+              ((entry as PreSessionExploreMessage).role === "user" ||
+                (entry as PreSessionExploreMessage).role === "bot") &&
+              typeof (entry as PreSessionExploreMessage).content === "string",
+          )
+          .map((entry) => ({
+            role: entry.role,
+            content: entry.content.trim(),
+          }))
+          .filter((entry) => entry.content.length > 0)
+      : undefined,
+    markets: markets
+      .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object")
+      .map((market) => ({
+        marketId: typeof market.marketId === "string" ? market.marketId.trim() : "",
+        question: typeof market.question === "string" ? market.question.trim() : "Untitled market",
+        eventTitle: typeof market.eventTitle === "string" ? market.eventTitle.trim() : undefined,
+        tokenIds: Array.isArray(market.tokenIds)
+          ? market.tokenIds.filter((tokenId): tokenId is string => typeof tokenId === "string")
+          : undefined,
+      }))
+      .filter((market) => market.marketId.length > 0),
+  };
+}
 
 export function workflowFromPreSession(preSession: PreSessionInput): SessionWorkflowState {
   const shortlist = trimShortlist(

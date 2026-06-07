@@ -42,8 +42,15 @@ export async function listSessions(userId: string) {
         getSessionWorkflow(session.id),
         getPendingFeedback(session.id),
       ]);
+      const metadata = session.metadata;
+      const hasPreSession = Boolean(
+        metadata &&
+          typeof metadata === "object" &&
+          (metadata as Record<string, unknown>).preSession,
+      );
       const resume = buildSessionResumeState(workflow, pending, {
         createdAt: session.createdAt,
+        hasPreSession,
       });
 
       return {
@@ -51,6 +58,7 @@ export async function listSessions(userId: string) {
         name: session.name,
         createdAt: session.createdAt,
         updatedAt: session.updatedAt,
+        hasPreSession,
         resume,
         latestStage: latestStage
           ? {

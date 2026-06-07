@@ -5,6 +5,7 @@ import { getUserAiConfig } from "../graph/model/getUserConfig";
 import { publicSearch } from "../polymarket/publicSearch";
 import { jsonFail, jsonOk } from "../shared/apiResponse";
 import { assertUserCanRunBot } from "../db/users";
+import { OPERATOR_VOICE_GUIDELINES } from "../shared/operatorVoice";
 import { scoreDiscoverMarkets, type DiscoverMarketHit } from "./scoring";
 
 export type DiscoverChatMessage = {
@@ -21,7 +22,7 @@ type DiscoverChatResult = {
 
 const DISCOVER_SYSTEM = [
   "You help operators find Polymarket markets before a trading session starts.",
-  "Be friendly, concise, and plain-spoken — no jargon about tools or APIs.",
+  OPERATOR_VOICE_GUIDELINES,
   "Return ONLY valid JSON with this shape:",
   '{ "reply": string, "topic"?: string, "queries"?: string[3], "readyToSearch": boolean }',
   "Ask one clarifying question at a time when the topic is vague.",
