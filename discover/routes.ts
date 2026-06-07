@@ -152,17 +152,21 @@ export async function discoverRun(c: Context) {
   const searchQueries =
     queries.length > 0 ? queries : [topic, `${topic} prediction`, `${topic} odds`].slice(0, 3);
 
-  const hits: DiscoverMarketHit[] = [];
-  for (const query of searchQueries) {
-    const result = await publicSearch({
-      q: query,
-      limitPerType: 8,
-      eventsStatus: "active",
-      keepClosedMarkets: 0,
-      sort: "volume",
-      ascending: false,
-    });
+  const searchResults = await Promise.all(
+    searchQueries.map((query) =>
+      publicSearch({
+        q: query,
+        limitPerType: 8,
+        eventsStatus: "active",
+        keepClosedMarkets: 0,
+        sort: "volume",
+        ascending: false,
+      }).then((result) => ({ query, result })),
+    ),
+  );
 
+  const hits: DiscoverMarketHit[] = [];
+  for (const { query, result } of searchResults) {
     for (const event of result.events ?? []) {
       for (const market of event.markets ?? []) {
         if (market.closed || market.active === false) {

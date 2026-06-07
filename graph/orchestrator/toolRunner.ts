@@ -88,14 +88,17 @@ export async function requestOperatorFeedback(
   }
 
   const feedback = enrichFeedbackRequest(workflow.phase, metadata, workflow);
-  const pending = createPendingFeedback({
-    type: feedback.type,
-    question: feedback.question,
-    options: feedback.options,
-    minSelections: feedback.minSelections,
-    maxSelections: feedback.maxSelections,
-    reason: toolCall.reason,
-  });
+  const pending = {
+    ...createPendingFeedback({
+      type: feedback.type,
+      question: feedback.question,
+      options: feedback.options,
+      minSelections: feedback.minSelections,
+      maxSelections: feedback.maxSelections,
+      reason: toolCall.reason,
+    }),
+    phase: workflow.phase,
+  };
   await savePendingFeedback(sessionId, pending);
 
   emitUiEvent(

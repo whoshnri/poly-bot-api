@@ -63,7 +63,7 @@ async function runDeterministicPhases(ctx: ReturnType<typeof createWorkflowConte
 
       case "DECIDE":
         await runDecidePhase(ctx);
-        return;
+        continue;
 
       case "BACKGROUND":
         await runBackgroundPhase(ctx);

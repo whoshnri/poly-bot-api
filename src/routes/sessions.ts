@@ -49,6 +49,7 @@ export async function startSession(c: Context) {
       summary?: string;
       queries?: string[];
       selectedMarketId?: string;
+      selectedMarketIds?: string[];
       exploreMessages?: Array<{ role?: "user" | "bot"; content?: string }>;
       markets?: Array<{
         marketId?: string;
@@ -59,10 +60,13 @@ export async function startSession(c: Context) {
     };
   };
   const preSessionRaw = body.preSession;
+  const selectedMarketIds = (preSessionRaw?.selectedMarketIds ?? [])
+    .map((marketId) => marketId?.trim())
+    .filter((marketId): marketId is string => Boolean(marketId));
+  const primaryMarketId =
+    preSessionRaw?.selectedMarketId?.trim() || selectedMarketIds[0] || "";
   const hasPreSession = Boolean(
-    preSessionRaw?.selectedMarketId &&
-      preSessionRaw.topic?.trim() &&
-      preSessionRaw.markets?.length,
+    primaryMarketId && preSessionRaw?.topic?.trim() && preSessionRaw.markets?.length,
   );
 
   if (!hasPreSession) {
@@ -73,8 +77,10 @@ export async function startSession(c: Context) {
     );
   }
 
+  const normalizedSelectedMarketIds =
+    selectedMarketIds.length > 0 ? selectedMarketIds : [primaryMarketId];
   const instruction = hasPreSession
-    ? `Research and evaluate: ${preSessionRaw!.topic!.trim()} — starting from pre-selected market ${preSessionRaw!.selectedMarketId}.`
+    ? `Research and evaluate: ${preSessionRaw!.topic!.trim()} — starting from ${normalizedSelectedMarketIds.length} pre-selected market${normalizedSelectedMarketIds.length === 1 ? "" : "s"}.`
     : body.instruction?.trim() || "Start active market discovery.";
 
   await applyRuntimeBotConfigForUser(userId);
@@ -91,9 +97,7 @@ export async function startSession(c: Context) {
 
   const createdAt = new Date();
   const selectedMarketQuestion = hasPreSession
-    ? preSessionRaw!.markets!.find(
-        (market) => market.marketId === preSessionRaw!.selectedMarketId,
-      )?.question
+    ? preSessionRaw!.markets!.find((market) => market.marketId === primaryMarketId)?.question
     : undefined;
   const session = await createNewTask({
     name: hasPreSession
@@ -111,7 +115,8 @@ export async function startSession(c: Context) {
               topic: preSessionRaw!.topic!.trim(),
               summary: preSessionRaw!.summary?.trim(),
               queries: preSessionRaw!.queries ?? [],
-              selectedMarketId: preSessionRaw!.selectedMarketId!,
+              selectedMarketId: primaryMarketId,
+              selectedMarketIds: normalizedSelectedMarketIds,
               markets: preSessionRaw!.markets!,
               exploreMessages: (preSessionRaw!.exploreMessages ?? [])
                 .filter(
@@ -148,7 +153,8 @@ export async function startSession(c: Context) {
         topic: preSessionRaw!.topic!.trim(),
         summary: preSessionRaw!.summary?.trim(),
         queries: preSessionRaw!.queries ?? [],
-        selectedMarketId: preSessionRaw!.selectedMarketId!,
+        selectedMarketId: primaryMarketId,
+        selectedMarketIds: normalizedSelectedMarketIds,
         exploreMessages,
         markets: preSessionRaw!.markets!.map((market) => ({
           marketId: market.marketId!.trim(),

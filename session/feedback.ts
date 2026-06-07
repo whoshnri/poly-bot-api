@@ -1,7 +1,18 @@
 import { randomUUID } from "node:crypto";
+import { readSessionScoring } from "../lib/scoring";
 import prisma from "../db/prisma";
+import { buildRankedMarketPresentations } from "../shared/chatPresentation";
+import { getSessionWorkflow } from "./workflow";
 
 export type FeedbackType = "mcq" | "text" | "mcq_or_custom" | "multi_select";
+
+export type PendingFeedbackRankedMarket = {
+  rank: number;
+  marketId: string;
+  question: string;
+  ev: number;
+  confidence: number;
+};
 
 export type PendingFeedback = {
   requestId: string;
@@ -12,6 +23,8 @@ export type PendingFeedback = {
   maxSelections?: number;
   reason: string;
   createdAt: string;
+  phase?: string;
+  rankedMarkets?: PendingFeedbackRankedMarket[];
 };
 
 export type FeedbackAnswerInput = {
@@ -184,6 +197,29 @@ export async function getPendingFeedback(sessionId: string): Promise<PendingFeed
     return null;
   }
 
+  const rankedMarkets = Array.isArray(record.rankedMarkets)
+    ? record.rankedMarkets
+        .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object")
+        .map((entry, index) => ({
+          rank: typeof entry.rank === "number" ? entry.rank : index + 1,
+          marketId: typeof entry.marketId === "string" ? entry.marketId : "unknown",
+          question: typeof entry.question === "string" ? entry.question : "Unknown market",
+          ev: typeof entry.ev === "number" ? entry.ev : 0,
+          confidence: typeof entry.confidence === "number" ? entry.confidence : 0,
+        }))
+    : undefined;
+
+  const workflow = await getSessionWorkflow(sessionId);
+  const phase =
+    typeof record.phase === "string" ? record.phase : workflow.phase ?? undefined;
+  const scoring = readSessionScoring(metadata);
+  const enrichedRankedMarkets =
+    rankedMarkets && rankedMarkets.length > 0
+      ? rankedMarkets
+      : phase === "DECIDE" && scoring?.scoredMarkets?.length
+        ? buildRankedMarketPresentations(scoring.scoredMarkets)
+        : rankedMarkets;
+
   return {
     requestId: record.requestId,
     type: record.type as FeedbackType,
@@ -197,6 +233,8 @@ export async function getPendingFeedback(sessionId: string): Promise<PendingFeed
       typeof record.maxSelections === "number" ? record.maxSelections : undefined,
     reason: typeof record.reason === "string" ? record.reason : "",
     createdAt: typeof record.createdAt === "string" ? record.createdAt : new Date().toISOString(),
+    phase,
+    rankedMarkets: enrichedRankedMarkets,
   };
 }
 

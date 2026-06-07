@@ -19,7 +19,8 @@ import {
   savePendingFeedback,
 } from "../../session/feedback";
 import { getSessionWorkflow, updateSessionWorkflow } from "../../session/workflow";
-import { formatRankedOption } from "../../session/workflowLogic";
+import { formatRankedOption, type MarketCandidate } from "../../session/workflowLogic";
+import type { PendingFeedback } from "../../session/feedback";
 import { debugError, logInfo } from "../../shared/log";
 import {
   buildRankedMarketPresentations,
@@ -86,27 +87,28 @@ function modelContentToText(content: unknown): string {
 
 async function fetchNormalizedMarkets(
   marketIds: string[],
-  existing: NormalizedMarket[],
+  existing: NormalizedMarket[] = [],
 ): Promise<NormalizedMarket[]> {
   const existingById = new Map(existing.map((market) => [market.id, market]));
-  const normalized: NormalizedMarket[] = [];
 
-  for (const marketId of marketIds) {
-    const cached = existingById.get(marketId);
-    if (cached) {
-      normalized.push(cached);
-      continue;
-    }
+  const fetched = await Promise.all(
+    marketIds.map(async (marketId) => {
+      const cached = existingById.get(marketId);
+      if (cached) {
+        return cached;
+      }
 
-    try {
-      const market = await getMarketById({ marketId });
-      normalized.push(normalizeMarketFromGamma(market));
-    } catch (error) {
-      debugError("graph.decide", "Failed to fetch market for scoring", { marketId }, error);
-    }
-  }
+      try {
+        const market = await getMarketById({ marketId });
+        return normalizeMarketFromGamma(market);
+      } catch (error) {
+        debugError("graph.decide", "Failed to fetch market for scoring", { marketId }, error);
+        return null;
+      }
+    }),
+  );
 
-  return normalized;
+  return fetched.filter((market): market is NormalizedMarket => market !== null);
 }
 
 async function estimateMarketProbability(
@@ -236,20 +238,23 @@ export async function runDecidePhase(ctx: WorkflowRunContext): Promise<void> {
     workflow.chosen?.marketId ?? workflow.userSpec?.targetMarketId,
   );
 
-  const normalizedMarkets = await fetchNormalizedMarkets(marketIds, []);
+  const normalizedMarkets = await fetchNormalizedMarkets(marketIds);
 
-  const estimates: Record<string, AIEstimate> = {};
-  for (const market of normalizedMarkets) {
-    const entries = researchCookie[market.id] ?? [];
-    const latest = entries.at(-1);
-    const researchContext = latest?.summary ?? entries.map((entry) => entry.summary).join("\n\n");
-
-    estimates[market.id] = await estimateMarketProbability(
-      market,
-      researchContext,
-      loginUserId,
-    );
-  }
+  const estimatesEntries = await Promise.all(
+    normalizedMarkets.map(async (market) => {
+      const entries = researchCookie[market.id] ?? [];
+      const latest = entries.at(-1);
+      const researchContext =
+        latest?.summary ?? entries.map((entry) => entry.summary).join("\n\n");
+      const estimate = await estimateMarketProbability(
+        market,
+        researchContext,
+        loginUserId,
+      );
+      return [market.id, estimate] as const;
+    }),
+  );
+  const estimates = Object.fromEntries(estimatesEntries) as Record<string, AIEstimate>;
 
   const scoredMarkets = scoreMarkets(normalizedMarkets, estimates);
   const opportunities = filterOpportunities(scoredMarkets);
@@ -276,17 +281,76 @@ export async function runDecidePhase(ctx: WorkflowRunContext): Promise<void> {
     rankedMarketIds,
   }));
 
+  const uniqueMarketIds = [...new Set(marketIds)];
+  if (uniqueMarketIds.length === 1) {
+    const onlyMarketId = uniqueMarketIds[0]!;
+    const candidate =
+      shortlist.find((entry) => entry.marketId === onlyMarketId) ??
+      ({
+        marketId: onlyMarketId,
+        question:
+          normalizedMarkets.find((market) => market.id === onlyMarketId)?.question ??
+          "Selected market",
+      } satisfies MarketCandidate);
+
+    await updateSessionWorkflow(sessionId, (current) => ({
+      ...current,
+      rankedMarketIds,
+      phase: "BACKGROUND",
+      userSpec: {
+        source: current.userSpec?.source ?? "prompt",
+        topic: current.userSpec?.topic ?? candidate.question,
+        targetMarketId: candidate.marketId,
+      },
+      chosen: {
+        marketId: candidate.marketId,
+        tokenId: candidate.tokenIds?.[0] ?? current.chosen?.tokenId ?? "",
+        side: current.chosen?.side ?? "BUY",
+        thesis: current.chosen?.thesis ?? "",
+      },
+    }));
+
+    const emitState = {
+      onEvent: ctx.onEvent ?? null,
+      sessionId,
+      wakeTraceId: ctx.wakeTraceId,
+      userId: ctx.userId,
+    };
+
+    emitChatMessage(
+      emitState,
+      "bot",
+      `Only one market to compare — moving ahead with **${candidate.question}**.`,
+      "Auto-selected after scoring",
+      sessionId,
+      {
+        contentKind: "decide-summary",
+        contentData: { rankedMarkets: buildRankedMarketPresentations(scoredMarkets) } as unknown as Record<string, unknown>,
+      },
+    );
+
+    logInfo("orchestrator.decide", "run-decide auto-advanced single market", {
+      sessionId,
+      marketId: onlyMarketId,
+    });
+    return;
+  }
+
   const options = rankedMarketIds.map((marketId) => formatRankedOption(marketId, shortlist));
 
   const rankedMarkets = buildRankedMarketPresentations(scoredMarkets);
 
-  const pending = createPendingFeedback({
-    type: "mcq",
-    question:
-      "Which market should we focus on next? Options are ranked by expected value — pick one for the detailed background pass.",
-    options,
-    reason: "The system ranked the researched markets and now needs one final operator choice.",
-  });
+  const pending: PendingFeedback = {
+    ...createPendingFeedback({
+      type: "mcq",
+      question:
+        "Which market should we focus on next? Options are ranked by expected value — pick one for the detailed background pass.",
+      options,
+      reason: "The system ranked the researched markets and now needs one final operator choice.",
+    }),
+    phase: "DECIDE",
+    rankedMarkets,
+  };
   await savePendingFeedback(sessionId, pending);
 
   const emitState = {

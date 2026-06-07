@@ -256,6 +256,7 @@ export type PreSessionInput = {
   summary?: string;
   queries?: string[];
   selectedMarketId: string;
+  selectedMarketIds?: string[];
   markets: PreSessionMarketInput[];
   exploreMessages?: PreSessionExploreMessage[];
 };
@@ -280,6 +281,13 @@ export function readPreSessionFromMetadata(metadata: unknown): PreSessionInput |
     return null;
   }
 
+  const selectedMarketIds = Array.isArray(value.selectedMarketIds)
+    ? value.selectedMarketIds
+        .filter((entry): entry is string => typeof entry === "string")
+        .map((entry) => entry.trim())
+        .filter(Boolean)
+    : [selectedMarketId];
+
   return {
     topic,
     summary: typeof value.summary === "string" ? value.summary.trim() : undefined,
@@ -287,6 +295,7 @@ export function readPreSessionFromMetadata(metadata: unknown): PreSessionInput |
       ? value.queries.filter((entry): entry is string => typeof entry === "string")
       : [],
     selectedMarketId,
+    selectedMarketIds,
     exploreMessages: Array.isArray(value.exploreMessages)
       ? value.exploreMessages
           .filter(
@@ -327,11 +336,23 @@ export function workflowFromPreSession(preSession: PreSessionInput): SessionWork
     })),
   );
 
-  const selected =
+  const requestedIds = (preSession.selectedMarketIds ?? [preSession.selectedMarketId])
+    .map((marketId) => marketId.trim())
+    .filter(Boolean);
+  const selectedMarketIds = requestedIds.filter((marketId, index, all) =>
+    all.indexOf(marketId) === index,
+  );
+
+  if (selectedMarketIds.length === 0) {
+    throw new Error("Pre-session payload must include at least one selected market.");
+  }
+
+  const primary =
     shortlist.find((candidate) => candidate.marketId === preSession.selectedMarketId) ??
+    shortlist.find((candidate) => candidate.marketId === selectedMarketIds[0]) ??
     shortlist[0];
 
-  if (!selected) {
+  if (!primary) {
     throw new Error("Pre-session payload must include at least one market.");
   }
 
@@ -340,10 +361,10 @@ export function workflowFromPreSession(preSession: PreSessionInput): SessionWork
     userSpec: {
       topic: preSession.topic,
       source: "prompt",
-      targetMarketId: selected.marketId,
+      targetMarketId: primary.marketId,
     },
     shortlist,
-    selectedMarketIds: [selected.marketId],
+    selectedMarketIds,
   };
 }
 

@@ -15,6 +15,7 @@ import {
   resolveApprovalFeedback,
   shortlistResearchComplete,
   trimShortlist,
+  workflowFromPreSession,
   type SessionWorkflowState,
 } from "./workflowLogic";
 
@@ -242,5 +243,23 @@ describe("matchShortlistSelection", () => {
   test("matches by market id in answer", () => {
     const shortlist = [{ marketId: "m1", question: "Will X win?" }];
     expect(matchShortlistSelection(shortlist, "pick m1 please")).toEqual(shortlist[0]);
+  });
+});
+
+describe("workflowFromPreSession", () => {
+  test("starts RESEARCH with multiple selected markets", () => {
+    const workflow = workflowFromPreSession({
+      topic: "US election",
+      selectedMarketId: "m1",
+      selectedMarketIds: ["m1", "m2"],
+      markets: [
+        { marketId: "m1", question: "Will A win?" },
+        { marketId: "m2", question: "Will B win?" },
+      ],
+    });
+
+    expect(workflow.phase).toBe("RESEARCH");
+    expect(workflow.selectedMarketIds).toEqual(["m1", "m2"]);
+    expect(workflow.shortlist).toHaveLength(2);
   });
 });
